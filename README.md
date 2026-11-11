@@ -27,11 +27,33 @@ Open [http://localhost:3000](http://localhost:3000). For automatic server restar
 | --- | --- |
 | `GET /api/health` | Server status and version |
 | `GET /api/bots` | Workshop bot roster |
-| `POST /api/tournaments` | Create a tournament session; accepts optional JSON `{ "seed": number }` |
+| `POST /api/bots` | Upload a Python strategy `{ "name", "source" }` |
+| `POST /api/tournaments` | Create a tournament session; accepts optional JSON `{ "seed": number, "botIds": string[] }` |
 | `GET /api/tournaments/:id` | Read a session |
+| `POST /api/tournaments/:id/run` | Run a real server-side 2–5 bot table and return the hand log/standings |
 | `GET /api/tournaments/:id/events` | Server-sent event stream for future live engine events |
 
-The visual tournament currently uses the existing deterministic browser engine. A workshop backend can replace it by publishing `hand`, `act`, `street`, `win`, and `bust` events to the session stream while retaining the same 3D broadcast client.
+The visual tournament currently uses the existing deterministic browser engine. The server now has its own real deal, chip, showdown, five-card evaluator, and scoring logic. A workshop backend can publish those server events to the session stream while retaining the same 3D broadcast client.
+
+## Python bot input
+
+`examples/python_bot.py` is a working bot. Upload it as JSON; the server stores the source outside Git and calls its `act(state)` function once per decision. The function receives only its two private cards and public table information, and must return one of:
+
+```python
+{"type": "fold"}
+{"type": "call"}
+{"type": "raise", "amount": 80}
+```
+
+Example, with `source` read from the example file:
+
+```bash
+curl -X POST http://localhost:3000/api/bots \
+  -H 'content-type: application/json' \
+  -d '{"name":"MyBot","source":"def act(state):\\n return {\\"type\\": \\"call\\"}"}'
+```
+
+This runner is deliberately for a trusted local workshop: it limits bot run time and does not invoke a shell, but Python source is still untrusted code. Use containers/VMs, CPU and memory limits, and network isolation before accepting student code on a shared or public deployment.
 
 ## Workshop extension ideas
 
