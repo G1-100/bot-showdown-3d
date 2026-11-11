@@ -913,10 +913,43 @@ function finish(){
 
 function restart(){
   clearTimeout(timer);pending=null;seed=(Date.now()%1e9)|0;round=0;running=true;
-  $("champ").innerHTML="";$("playBtn").textContent="Pause";makeBots();startRound();
+  $("champ").innerHTML="";makeBots();runServerDemo();
+}
+
+// Server-driven broadcast mode. The old in-browser engine remains in this file as a
+// graceful offline fallback, but the normal demo now obtains cards, decisions, pots,
+// and winners from the Node service before animating them in the 3D scene.
+function serverTable(hand){
+  const byName=new Map(bots.map(b=>[b.name,b]));
+  const seats=hand.players.map((p,i)=>({bot:byName.get(p.name)||{id:i,name:p.name,p:{label:"Python"}},stack:p.stack,cards:p.hole,inHand:!p.folded,allIn:false,bet:0,contrib:0,last:"",out:false,won:false}));
+  return {seats,dealer:0,hand:1,board:[],blinds:[10,20],alive(){return this.seats.filter(s=>!s.out)},potTotal(){return this.seats.reduce((sum,s)=>sum+s.contrib,0)}};
+}
+function runServerDemo(){
+  running=true;$('playBtn').disabled=true;$('playBtn').textContent='Server running…';
+  fetch('/api/tournaments',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({seed,botIds:['demo-0','demo-1','demo-2','demo-3','demo-4']})})
+    .then(r=>r.ok?r.json():Promise.reject(new Error('Could not create server tournament')))
+    .then(session=>fetch(`/api/tournaments/${session.id}/run`,{method:'POST'}))
+    .then(r=>r.ok?r.json():r.json().then(e=>Promise.reject(new Error(e.error||'Server tournament failed'))))
+    .then(result=>{
+      const hand=result.hands[0],T=serverTable(hand);tables=[T];
+      $('tableMeta').textContent=`Server table · ${result.hands.length} real hands completed`;
+      logLines=[];pushLog({t:'hand',msg:'Server deal: '+hand.players.map(p=>p.name).join(', ')});
+      if(view){view.seat(T);view.event({t:'hand',msg:'Server-dealt hand'},T)}
+      hand.events.forEach((event,n)=>setTimeout(()=>{
+        const i=T.seats.findIndex(s=>s.bot.name===event.bot),s=T.seats[i];if(i<0)return;
+        s.last=event.type==='fold'?'Fold':event.type==='raise'?`Raise ${fmt(event.amount)}`:event.type==='call'?`Call ${fmt(event.amount)}`:'Check';
+        if(event.type==='fold')s.inHand=false;else{s.bet+=event.amount;s.contrib+=event.amount}
+        const ev={t:'act',seat:i,msg:`${event.bot}: ${s.last}`};pushLog(ev);if(view)view.event(ev,T);
+      },n*190));
+      setTimeout(()=>{T.board=hand.rawBoard;for(const s of T.seats){const after=hand.players.find(p=>p.name===s.bot.name);if(after){s.stack=after.stack;s.won=s.bot.name===hand.winner}}const ev={t:'win',msg:`${hand.winner} wins ${fmt(hand.pot)} (server evaluated)`};pushLog(ev);if(view)view.event(ev,T);renderFeature(null)},Math.max(1,hand.events.length)*190+260);
+      result.standings.forEach((standing,index)=>{const b=bots.find(bot=>bot.name===standing.name);if(b){b.points=(result.standings.length-index-1)*4;b.delta=b.points}});renderLB();renderChips(false);
+      $('playBtn').disabled=false;$('playBtn').textContent='Run again';running=false;
+    })
+    .catch(error=>{$('tableMeta').textContent=`Server unavailable — local demo: ${error.message}`;$('playBtn').disabled=false;startRound()});
 }
 
 $("playBtn").addEventListener("click",()=>{
+  if($("playBtn").textContent==="Run again"){restart();return}
   if(round>=TOTAL_ROUNDS){restart();return}
   running=!running;$("playBtn").textContent=running?"Pause":"Play";
   if(!running){clearTimeout(timer)}else if(pending){const f=pending;pending=null;f()}
@@ -930,12 +963,7 @@ $("restartBtn").addEventListener("click",restart);
 
 // ---------- boot: load three.js, fall back to HUD-only if the library or WebGL is unavailable ----------
 seed=20261111;round=0;makeBots();layoutLB();
-// The scene remains deterministic in the browser, while the server creates a real
-// workshop session that can later receive validated bot events over SSE.
-fetch("/api/tournaments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({seed})})
-  .then(r=>r.ok?r.json():Promise.reject(new Error("session unavailable")))
-  .then(session=>{$("tableMeta").textContent=`Session ${session.id.slice(0,8)} · dealing…`;document.querySelector(".meta3d .dot").style.background="var(--good)"})
-  .catch(()=>{$("tableMeta").textContent="Local demo mode · dealing…"});
+document.querySelector('.meta3d .dot').style.background='var(--good)';
 try{
   const THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
   view=createView(THREE,$("view"),$("labels"),freeRect);
@@ -946,6 +974,6 @@ try{
 }
 window.addEventListener("resize",layoutLB);
 if(desktopMQ.addEventListener)desktopMQ.addEventListener("change",()=>{layoutLB();if(view)view.resize()});
-renderLB();startRound();
+renderLB();runServerDemo();
 if(view)requestAnimationFrame(()=>view.resize());
 </script>

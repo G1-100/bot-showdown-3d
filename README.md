@@ -33,7 +33,7 @@ Open [http://localhost:3000](http://localhost:3000). For automatic server restar
 | `POST /api/tournaments/:id/run` | Run a real server-side 2–5 bot table and return the hand log/standings |
 | `GET /api/tournaments/:id/events` | Server-sent event stream for future live engine events |
 
-The visual tournament currently uses the existing deterministic browser engine. The server now has its own real deal, chip, showdown, five-card evaluator, and scoring logic. A workshop backend can publish those server events to the session stream while retaining the same 3D broadcast client.
+The visual demo now starts by requesting a server-run table. The server deals the cards, calls the bot decisions, calculates the pot/showdown, and returns the authoritative event log; the browser replays that log in the 3D scene. The old browser engine is retained only as an offline fallback if the local service is unavailable.
 
 ## Python bot input
 

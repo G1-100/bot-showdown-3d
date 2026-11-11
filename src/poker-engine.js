@@ -69,7 +69,10 @@ export async function playHand(players, { rng, dealer, decide }) {
   const contenders = active.filter(player => !player.folded); const pot = active.reduce((sum, player) => sum + player.paid, 0);
   const ranked = contenders.map(player => ({ player, score: evaluateBest([...player.hole, ...board]) })).sort((a, b) => b.score - a.score);
   const winner = ranked[0]?.player || active[0]; winner.stack += pot;
-  return { players: players.map(player => ({ ...player, stack: active.find(a => a.id === player.id)?.stack ?? player.stack })), event: { board: board.map(cardName), winner: winner.name, pot, events } };
+  return { players: players.map(player => ({ ...player, stack: active.find(a => a.id === player.id)?.stack ?? player.stack })), event: {
+    board: board.map(cardName), rawBoard: board, winner: winner.name, pot, events,
+    players: active.map(({ id, name, stack, hole, folded }) => ({ id, name, stack, hole, folded }))
+  } };
 }
 
 export async function runTable(players, { seed = Date.now(), decide, maxHands = 12 } = {}) {

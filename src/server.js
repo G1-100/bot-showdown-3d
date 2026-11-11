@@ -27,7 +27,7 @@ function json(res, code, body) {
 function readJson(req) {
   return new Promise((resolveBody, reject) => {
     let raw = "";
-    req.on("data", chunk => { raw += chunk; if (raw.length > 10_000) reject(new Error("Request too large")); });
+    req.on("data", chunk => { raw += chunk; if (raw.length > 25_000) reject(new Error("Request too large")); });
     req.on("end", () => { try { resolveBody(raw ? JSON.parse(raw) : {}); } catch { reject(new Error("Invalid JSON")); } });
   });
 }
